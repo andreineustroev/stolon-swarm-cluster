@@ -1,0 +1,12 @@
+{ "pgParameters" : {
+	"shared_buffers": "256MB",
+	"effective_cache_size": "256MB",
+	"work_mem": "1MB",
+	"maintenance_work_mem": "128MB",
+	"log_timezone": "UTC+3",
+	"wal_buffers": "1MB"
+	},
+  "usePgrewind": true,
+  "synchronousReplication" : true,
+  "automaticPgRestart" : false
+}

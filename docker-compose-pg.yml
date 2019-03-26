@@ -1,0 +1,140 @@
+version: '3.4'
+
+secrets:
+  pgsql:
+    file: ./etc/secrets/pgsql
+  pgsql_repl:
+    file: ./etc/secrets/pgsql_repl
+
+services:
+
+  sentinel:
+    image: andreineustroev/stolon:11.2
+    command: |
+      gosu stolon stolon-sentinel
+      --cluster-name stolon-cluster
+      --store-backend=consul
+      --store-endpoints http://server:8500
+      --log-level info
+    networks:
+      - consul_consul
+      - pgdb
+    deploy:
+      replicas: 2
+      update_config:
+        parallelism: 1
+        delay: 30s
+        order: stop-first
+        failure_action: pause
+
+  keeper1: &keeper1
+    image: andreineustroev/stolon:11.2
+    hostname: keeper1
+    environment:
+      - PGDATA=/var/lib/postgresql/data
+    volumes:
+      - pgkeeper1:/var/lib/postgresql/data
+    secrets:
+      - pgsql
+      - pgsql_repl
+    command: |
+      gosu stolon stolon-keeper
+      --pg-listen-address keeper1
+      --pg-repl-username replication
+      --uid keeper1
+      --pg-su-username postgres
+      --pg-su-passwordfile /run/secrets/pgsql
+      --pg-repl-passwordfile /run/secrets/pgsql_repl
+      --data-dir /var/lib/postgresql/data
+      --cluster-name stolon-cluster
+      --store-backend=consul
+      --store-endpoints http://server:8500
+      --log-level info
+    networks:
+      - consul_consul
+      - pgdb
+    deploy:
+      replicas: 1
+      placement:
+        constraints: [node.labels.nodename == node1]
+
+  keeper2:
+    <<: *keeper1
+    hostname: keeper2
+    volumes:
+      - pgkeeper2:/var/lib/postgresql/data
+    command: |
+      gosu stolon stolon-keeper
+      --pg-listen-address keeper2
+      --pg-repl-username replication
+      --uid keeper2
+      --pg-su-username postgres
+      --pg-su-passwordfile /run/secrets/pgsql
+      --pg-repl-passwordfile /run/secrets/pgsql
+      --data-dir /var/lib/postgresql/data
+      --cluster-name stolon-cluster
+      --store-backend=consul
+      --store-endpoints http://server:8500
+      --log-level info
+    deploy:
+      placement:
+        constraints: [node.labels.nodename == node2]
+
+  keeper3:
+    <<: *keeper1
+    hostname: keeper3
+    volumes:
+      - pgkeeper3:/var/lib/postgresql/data
+    command: |
+      gosu stolon stolon-keeper
+      --pg-listen-address keeper3
+      --pg-repl-username replication
+      --uid keeper3
+      --pg-su-username postgres
+      --pg-su-passwordfile /run/secrets/pgsql
+      --pg-repl-passwordfile /run/secrets/pgsql
+      --data-dir /var/lib/postgresql/data
+      --cluster-name stolon-cluster
+      --store-backend=consul
+      --store-endpoints http://server:8500
+      --log-level info
+    deploy:
+      placement:
+        constraints: [node.labels.nodename == node3]
+
+  proxy:
+    image: andreineustroev/stolon:11.2
+    command: |
+      gosu stolon stolon-proxy
+      --listen-address 0.0.0.0
+      --cluster-name stolon-cluster
+      --store-backend=consul
+      --store-endpoints http://server:8500
+      --log-level info
+    networks:
+      - consul_consul
+      - pgdb
+    ports:
+      - 5432:5432
+    deploy:
+      mode: global
+      update_config:
+        parallelism: 1
+        delay: 30s
+        order: stop-first
+        failure_action: rollback
+
+volumes:
+  pgkeeper1:
+    driver: local
+  pgkeeper2:
+    driver: local
+  pgkeeper3:
+    driver: local
+
+networks:
+  consul_consul:
+    external: true
+  pgdb:
+    driver: overlay
+    internal: true

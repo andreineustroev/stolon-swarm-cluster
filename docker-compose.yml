@@ -1,0 +1,43 @@
+version: '3.4'
+
+services:
+
+  server: &consul-server
+    image: consul:latest
+    deploy:
+      mode: global
+      restart_policy:
+        delay: 5s
+        max_attempts: 3
+      placement:
+       constraints: [node.labels.consul == slave]
+    networks:
+      - consul
+    command: |
+      agent -server -retry-join server-0
+      -client 0.0.0.0 -data-dir /consul/data
+      -bind='{{ GetInterfaceIP "eth0" }}'
+      -datacenter='general'
+      -domain='consul'
+
+  server-0:
+    <<: *consul-server
+    deploy:
+      replicas: 1
+      placement:
+       constraints: [node.labels.consul == master]
+    ports:
+      - "8400:8400"
+      - "8500:8500"
+      - "8600:8600"
+      - "8600:8600/udp"
+    command: |
+      agent -server -bootstrap-expect 3 -ui
+      -client 0.0.0.0 -data-dir /consul/data
+      -bind='{{ GetInterfaceIP "eth0" }}'
+      -datacenter='general'
+      -domain='consul'
+
+networks:
+  consul:
+    driver: overlay
